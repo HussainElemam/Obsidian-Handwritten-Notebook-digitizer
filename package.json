@@ -1,0 +1,30 @@
+{
+  "name": "obsidian-notebook-digitizer",
+  "version": "1.0.0",
+  "description": "Digitize handwritten notebook pages (Arabic, English, and mixed) into structured Obsidian notes using Gemini Vision API.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "test": "esbuild test/verify.ts --bundle --platform=node --external:obsidian | node"
+  },
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "ocr",
+    "gemini",
+    "handwriting",
+    "arabic",
+    "digitizer",
+    "notes"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.12.7",
+    "esbuild": "^0.21.2",
+    "obsidian": "^1.7.2",
+    "tslib": "^2.6.2",
+    "typescript": "^5.4.5"
+  }
+}

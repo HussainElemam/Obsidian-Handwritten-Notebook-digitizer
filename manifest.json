@@ -1,0 +1,10 @@
+{
+  "id": "notebook-digitizer",
+  "name": "Handwritten Notebook Digitizer",
+  "version": "1.0.0",
+  "minAppVersion": "0.15.0",
+  "description": "Digitize handwritten notes (Arabic, English, mixed) into structured Markdown notes using Gemini Vision API with collapsible image embeds.",
+  "author": "Antigravity",
+  "authorUrl": "",
+  "isDesktopOnly": false
+}
