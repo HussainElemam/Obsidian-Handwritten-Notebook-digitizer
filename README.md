@@ -1,23 +1,24 @@
 # Handwritten Notebook Digitizer for Obsidian
 
-An Obsidian plugin that digitizes physical notebook pages (handwritten in Arabic, English, or mixed bilingual) into structured Markdown notes using Google's Gemini Vision API.
+An Obsidian plugin that digitizes physical notebook pages in any language into structured Markdown notes using Google's Gemini Vision API.
 
 ---
 
 ## Features
 
 - **Multimodal Handwriting Recognition**: Uses Google Gemini models (featuring the latest **Gemini 3.8 Flash**, **Gemini 3.1 Pro**, and **Gemini 3.5 Flash-Lite**, along with 2.5/2.0/1.5 versions and custom models) to accurately transcribe messy handwriting by reasoning through grammar and sentence context.
-- **Arabic, English & Mixed Content**: Seamlessly transcribes Arabic, English technical terms, programming code, LaTeX mathematical formulas (`$E=mc^2$`), tables, and nested bullet points.
+- **Multilingual Handwriting & Mixed Content**: Seamlessly transcribes handwriting in any language or script, including mixed bilingual text, technical terminology, programming code, LaTeX mathematical formulas (`$E=mc^2$`), tables, and nested bullet points.
+- **Handwritten Diagrams to Mermaid**: Automatically detects handwritten flowcharts, workflows, hierarchies, sequence charts, and process diagrams and converts them into native Obsidian Mermaid diagrams (````mermaid ... ````).
 - **Continuous Seamless Notes**: When multiple pages are selected, they are combined into one natural, continuous Markdown note without artificial page break dividers (or optionally separated with page dividers via an in-modal toggle).
 - **Automatic Image Optimization**: Automatically optimizes photos (up to 1920px max dimension, quality-tuned JPEG) before uploading and saving. This drastically reduces payload size (from 5–8MB down to ~300–600KB) and prevents gateway timeouts, with zero loss in handwriting recognition quality with Gemini 3.8 Flash.
 - **Dedicated Scans Subfolder**: Page images are stored inside a dedicated `scans/` subfolder under the note's directory by default, keeping your notes clean.
-- **Collapsible Scans for Proofreading**: Automatically embeds original page scans into collapsible callouts (`> [!info]- Original Scan (Page X)`) at the top of the group, allowing effortless side-by-side verification.
+- **Collapsible Scans for Proofreading**: Optionally embeds original page scans into collapsible callouts (`> [!info]- Original Scan (Page X)`) at the top of the group or per page, allowing effortless side-by-side verification.
 - **Personal Gemini API Key**: Users provide and store their own free Google Gemini API key locally in their vault. Keys can be entered or changed directly inside the capture modal or in Settings.
 - **Interactive Capture Modal**:
   - 📁 **File Selector / Drag & Drop**: Select multiple page images at once.
   - 📷 **Mobile Camera Capture**: Capture photos directly from your phone's camera inside Obsidian (`capture="environment"`).
   - 🖼️ **Thumbnail Preview & Reordering**: Reorder pages or remove accidental uploads before processing.
-  - ⚙️ **Quick Toggles**: Switch between models and toggle page breaks on the fly.
+  - ⚙️ **Quick In-Modal Options**: Toggle embedding original scan callouts, separate pages with page breaks, and switch models on the fly.
 - **Custom Prompt Instructions**: Add quick instructions for any batch (e.g., *"Ignore the pencil doodles on page 2"*, *"Ignore crossed-out text at the bottom"*).
 - **Flexible Destination**:
   - **Create New Note**: Automatically names the note or accepts a custom title.
@@ -52,8 +53,7 @@ An Obsidian plugin that digitizes physical notebook pages (handwritten in Arabic
    - **Gemini API Key**: Paste your API key.
    - **Gemini Model**: Select from `Gemini 3.8 Flash` (default, fast & recommended), `Gemini 3.1 Pro` (most capable for complex handwriting), `Gemini 3.5 Flash-Lite`, earlier versions, or `Custom Model`.
    - **Scans Subfolder**: Default is `scans`. Uploaded page images are stored in a dedicated subfolder under the note's directory to keep your notes clean.
-   - **Embed Scans in Collapsible Callouts**: Enabled by default.
-   - **Callout Title**: Default is `Original Scan` (or customize, e.g. `صورة الصفحة الأصلية`).
+   - **Callout Title**: Default is `Original Scan` (or customize to your preferred title or language).
 
 ---
 
@@ -64,7 +64,9 @@ An Obsidian plugin that digitizes physical notebook pages (handwritten in Arabic
    `Digitize Handwritten Notes`
 2. Click **📁 Choose Images** (or drag and drop images), or **📷 Capture with Camera** on mobile.
 3. (Optional) Enter custom instructions for this batch.
-4. (Optional) Toggle **Separate pages with page breaks** if you want explicit page dividers (`---`) and scans before each page instead of one continuous note.
+4. (Optional) In the Options section:
+   - Toggle **Add callout with original scan** (enabled by default; uncheck if you only want transcribed text without embedding or saving scans).
+   - Toggle **Separate pages with page breaks** if you want explicit page dividers (`---`) instead of one continuous note.
 5. Keep **Create New Note** selected (or choose Append), enter a title, and click **Digitize & Transcribe**.
 
 ### 2. Append Pages to an Existing Note

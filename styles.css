@@ -360,7 +360,7 @@
 	font-size: 0.85em;
 }
 
-/* Options Section (Page Breaks) */
+/* Options Section (Page Breaks & Callouts) */
 .digitizer-options-section {
 	margin-top: 10px;
 	margin-bottom: 12px;
@@ -380,10 +380,14 @@
 }
 
 .digitizer-checkbox-desc {
-	margin: 2px 0 0 24px;
+	margin: 2px 0 8px 24px;
 	font-size: 0.78em;
 	color: var(--text-muted);
 	line-height: 1.3;
+}
+
+.digitizer-checkbox-desc:last-child {
+	margin-bottom: 0;
 }
 
 /* Status & Progress */

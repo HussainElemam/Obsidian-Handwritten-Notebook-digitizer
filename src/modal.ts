@@ -21,6 +21,7 @@ export class DigitizeModal extends Modal {
 	isProcessing: boolean = false;
 	showKeyInput: boolean = false;
 	enablePageBreaks: boolean = false;
+	embedCallouts: boolean = true;
 	statusMessageEl: HTMLElement | null = null;
 	submitButtonEl: HTMLButtonElement | null = null;
 
@@ -29,6 +30,7 @@ export class DigitizeModal extends Modal {
 		this.plugin = plugin;
 		this.activeFile = this.app.workspace.getActiveFile();
 		this.enablePageBreaks = this.plugin.settings.enablePageBreaks ?? false;
+		this.embedCallouts = this.plugin.settings.embedCallouts ?? true;
 		if (initialTargetMode) {
 			this.targetMode = initialTargetMode;
 		} else if (this.activeFile && this.activeFile.extension === "md") {
@@ -131,8 +133,25 @@ export class DigitizeModal extends Modal {
 			titleInputContainer.style.display = "none";
 		}
 
-		// Options section (Page Breaks and Image Compression toggles)
+		// Options section (Callouts and Page Breaks toggles)
 		const optionsSection = contentEl.createDiv({ cls: "digitizer-options-section" });
+
+		// Callout with original scan toggle
+		const calloutLabel = optionsSection.createEl("label", { cls: "digitizer-checkbox-label" });
+		const calloutCheckbox = calloutLabel.createEl("input", { type: "checkbox" });
+		calloutCheckbox.checked = this.embedCallouts;
+		calloutLabel.appendText(" Add callout with original scan");
+
+		const calloutDesc = optionsSection.createEl("p", {
+			cls: "digitizer-checkbox-desc",
+			text: "Embeds original page scan inside a collapsible callout for easy proofreading.",
+		});
+
+		calloutCheckbox.addEventListener("change", async () => {
+			this.embedCallouts = calloutCheckbox.checked;
+			this.plugin.settings.embedCallouts = this.embedCallouts;
+			await this.plugin.saveSettings();
+		});
 
 		// Page Breaks toggle
 		const pageBreakLabel = optionsSection.createEl("label", { cls: "digitizer-checkbox-label" });
@@ -427,14 +446,17 @@ export class DigitizeModal extends Modal {
 				noteFolderPath = parentFolder && parentFolder.path !== "/" ? parentFolder.path : "";
 			}
 
-			// 2. Save page images into 'scans' subfolder
-			this.updateStatus("Saving page images to scans subfolder...");
-			const savedTFiles = await saveImagesToVault(
-				this.app,
-				preparedImages,
-				this.plugin.settings,
-				noteFolderPath
-			);
+			// 2. Save page images into 'scans' subfolder (if callouts are enabled)
+			let savedTFiles: TFile[] = [];
+			if (this.embedCallouts) {
+				this.updateStatus("Saving page images to scans subfolder...");
+				savedTFiles = await saveImagesToVault(
+					this.app,
+					preparedImages,
+					this.plugin.settings,
+					noteFolderPath
+				);
+			}
 
 			// 3. Call Gemini API
 			const effectiveModel = getEffectiveModel(this.plugin.settings);
@@ -452,7 +474,7 @@ export class DigitizeModal extends Modal {
 			});
 
 			// 4. Format note with collapsible callouts
-			this.updateStatus("Building note and embedding scans...");
+			this.updateStatus("Building note...");
 			const targetPath = this.targetMode === "append" && this.activeFile
 				? this.activeFile.path
 				: (noteFolderPath ? `${noteFolderPath}/note.md` : "note.md");
@@ -461,7 +483,11 @@ export class DigitizeModal extends Modal {
 				this.app,
 				transcription,
 				savedTFiles,
-				{ ...this.plugin.settings, enablePageBreaks: this.enablePageBreaks },
+				{
+					...this.plugin.settings,
+					enablePageBreaks: this.enablePageBreaks,
+					embedCallouts: this.embedCallouts,
+				},
 				targetPath
 			);
 

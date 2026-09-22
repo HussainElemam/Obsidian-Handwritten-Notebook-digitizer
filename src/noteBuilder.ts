@@ -83,8 +83,8 @@ export function formatNoteWithCallouts(
 ): string {
 	const calloutTitle = settings.calloutTitle || "Original Scan";
 
-	// If page breaks are enabled and multiple files are provided, format per page
-	if (settings.enablePageBreaks && savedFiles.length > 1) {
+	// If page breaks are enabled, format per page
+	if (settings.enablePageBreaks) {
 		const pageBreakRegex = /<!--\s*(?:PAGE_BREAK|PAGE)\s*:\s*(?:Page\s*)?(\d+)\s*-->/gi;
 		const matches = [...transcription.matchAll(pageBreakRegex)];
 

@@ -3,7 +3,7 @@
   "name": "Handwritten Notebook Digitizer",
   "version": "1.0.0",
   "minAppVersion": "0.15.0",
-  "description": "Digitize handwritten notes (Arabic, English, mixed) into structured Markdown notes using Gemini Vision API with collapsible image embeds.",
+  "description": "Digitize handwritten notes in any language into structured Markdown notes using Gemini Vision API with optional scan callouts.",
   "author": "Hussian Elemam",
   "authorUrl": "",
   "isDesktopOnly": false

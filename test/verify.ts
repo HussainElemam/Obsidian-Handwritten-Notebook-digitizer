@@ -43,10 +43,13 @@ function runTests() {
 	if (promptDefault.includes("PAGE_BREAK: 1")) {
 		throw new Error("Prompt should not contain page break markers");
 	}
-	console.log("✓ Default prompt verified (seamless, no page breaks)");
+	if (!promptDefault.includes("Mermaid diagram") || !promptDefault.includes("```mermaid")) {
+		throw new Error("Prompt missing Mermaid diagram instructions");
+	}
+	console.log("✓ Default prompt verified (seamless, no page breaks, Mermaid diagrams enabled)");
 
-	const promptWithCustom = buildSystemPrompt("Use Modern Standard Arabic.", "Ignore sketches on page 2.");
-	if (!promptWithCustom.includes("Use Modern Standard Arabic") || !promptWithCustom.includes("Ignore sketches on page 2")) {
+	const promptWithCustom = buildSystemPrompt("Keep technical terms in code blocks.", "Ignore sketches on page 2.");
+	if (!promptWithCustom.includes("Keep technical terms in code blocks") || !promptWithCustom.includes("Ignore sketches on page 2")) {
 		throw new Error("Prompt did not properly include custom and note-specific instructions");
 	}
 	console.log("✓ Custom prompt insertion verified");
@@ -94,6 +97,42 @@ function runTests() {
 		throw new Error("Note should contain transcription text");
 	}
 	console.log("✓ Callout format verified");
+
+	console.log("--- Test 6: formatNoteWithCallouts with embedCallouts = false ---");
+	const noteNoCallouts = formatNoteWithCallouts(
+		mockApp,
+		"Test transcription text",
+		[],
+		{ ...DEFAULT_SETTINGS, embedCallouts: false },
+		"note.md"
+	);
+	if (noteNoCallouts.includes("> [!info]- Original Scan") || noteNoCallouts.includes("scans/")) {
+		throw new Error("Note should NOT contain any callouts when embedCallouts is false");
+	}
+	if (!noteNoCallouts.includes("Test transcription text")) {
+		throw new Error("Note should contain transcription text");
+	}
+	console.log("✓ embedCallouts = false verified (continuous note)");
+
+	console.log("--- Test 7: formatNoteWithCallouts with page breaks and embedCallouts = false ---");
+	const twoPages = "<!-- PAGE_BREAK: 1 -->\nPage 1 content\n<!-- PAGE_BREAK: 2 -->\nPage 2 content";
+	const noteBreaksNoCallouts = formatNoteWithCallouts(
+		mockApp,
+		twoPages,
+		[],
+		{ ...DEFAULT_SETTINGS, enablePageBreaks: true, embedCallouts: false },
+		"note.md"
+	);
+	if (noteBreaksNoCallouts.includes("> [!info]-") || noteBreaksNoCallouts.includes("Original Scan")) {
+		throw new Error("Note should NOT contain any callouts when embedCallouts is false in page break mode");
+	}
+	if (!noteBreaksNoCallouts.includes("Page 1 content") || !noteBreaksNoCallouts.includes("Page 2 content")) {
+		throw new Error("Note should contain both pages content");
+	}
+	if (!noteBreaksNoCallouts.includes("---")) {
+		throw new Error("Note should contain page divider (---)");
+	}
+	console.log("✓ embedCallouts = false with page breaks verified");
 
 	console.log("--- All logic tests passed! ---");
 }

@@ -110,23 +110,10 @@ export class NotebookDigitizerSettingTab extends PluginSettingTab {
 		}
 
 
-		// Embed Callouts
-		new Setting(containerEl)
-			.setName("Embed Scans in Collapsible Callouts")
-			.setDesc("Embed original page scans inside a collapsible callout for easy proofreading.")
-			.addToggle((toggle) => {
-				toggle
-					.setValue(this.plugin.settings.embedCallouts)
-					.onChange(async (value) => {
-						this.plugin.settings.embedCallouts = value;
-						await this.plugin.saveSettings();
-					});
-			});
-
 		// Callout Title
 		new Setting(containerEl)
 			.setName("Callout Title")
-			.setDesc("Default title for the collapsible image callout (e.g., 'Original Scan' or 'صورة الصفحة الأصلية').")
+			.setDesc("Default title for the collapsible image callout (e.g., 'Original Scan').")
 			.addText((text) => {
 				text
 					.setPlaceholder("Original Scan")
@@ -157,7 +144,7 @@ export class NotebookDigitizerSettingTab extends PluginSettingTab {
 			.setDesc("Optional persistent instructions added to every transcription prompt (e.g., preferred formatting, vocabulary).")
 			.addTextArea((textArea) => {
 				textArea
-					.setPlaceholder("e.g. Prefer Modern Standard Arabic formatting. Keep English programming terms in inline code blocks.")
+					.setPlaceholder("e.g. Keep technical terms in inline code blocks, prefer bullet points for summary lists.")
 					.setValue(this.plugin.settings.customPrompt)
 					.onChange(async (value) => {
 						this.plugin.settings.customPrompt = value;

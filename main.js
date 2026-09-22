@@ -98,13 +98,7 @@ var NotebookDigitizerSettingTab = class extends import_obsidian.PluginSettingTab
         });
       });
     }
-    new import_obsidian.Setting(containerEl).setName("Embed Scans in Collapsible Callouts").setDesc("Embed original page scans inside a collapsible callout for easy proofreading.").addToggle((toggle) => {
-      toggle.setValue(this.plugin.settings.embedCallouts).onChange(async (value) => {
-        this.plugin.settings.embedCallouts = value;
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(containerEl).setName("Callout Title").setDesc("Default title for the collapsible image callout (e.g., 'Original Scan' or '\u0635\u0648\u0631\u0629 \u0627\u0644\u0635\u0641\u062D\u0629 \u0627\u0644\u0623\u0635\u0644\u064A\u0629').").addText((text) => {
+    new import_obsidian.Setting(containerEl).setName("Callout Title").setDesc("Default title for the collapsible image callout (e.g., 'Original Scan').").addText((text) => {
       text.setPlaceholder("Original Scan").setValue(this.plugin.settings.calloutTitle).onChange(async (value) => {
         this.plugin.settings.calloutTitle = value.trim() || "Original Scan";
         await this.plugin.saveSettings();
@@ -117,7 +111,7 @@ var NotebookDigitizerSettingTab = class extends import_obsidian.PluginSettingTab
       });
     });
     new import_obsidian.Setting(containerEl).setName("Default Custom Instructions").setDesc("Optional persistent instructions added to every transcription prompt (e.g., preferred formatting, vocabulary).").addTextArea((textArea) => {
-      textArea.setPlaceholder("e.g. Prefer Modern Standard Arabic formatting. Keep English programming terms in inline code blocks.").setValue(this.plugin.settings.customPrompt).onChange(async (value) => {
+      textArea.setPlaceholder("e.g. Keep technical terms in inline code blocks, prefer bullet points for summary lists.").setValue(this.plugin.settings.customPrompt).onChange(async (value) => {
         this.plugin.settings.customPrompt = value;
         await this.plugin.saveSettings();
       });
@@ -151,8 +145,8 @@ Your task is to accurately transcribe handwritten pages into clean, well-structu
 
 ### Core Guidelines:
 1. Language & Script:
-   - Handle Arabic, English, or mixed bilingual handwriting seamlessly.
-   - Maintain natural sentence flow and correct grammar.
+   - Accurately recognize and transcribe handwriting in any language, script, or mixed multilingual text seamlessly.
+   - Maintain natural sentence flow and correct grammar in the source language.
    - For messy, hurried, or unclear handwriting, use the surrounding sentence context, domain vocabulary, and grammatical rules to transcribe the most plausible and accurate words. Do not skip or summarize text.
 
 2. Structure & Formatting:
@@ -164,6 +158,7 @@ Your task is to accurately transcribe handwritten pages into clean, well-structu
      - Checklists: use '- [ ] ' or '- [x] '.
      - Tables: convert handwritten tables into clean Markdown tables '| Header | Header |'.
      - Math & Equations: convert formulas into LaTeX syntax ('$inline$' or '$$block$$').
+     - Diagrams & Flowcharts: when you see a handwritten diagram, flowchart, sequence, workflow, hierarchy, or process map, convert it into a Mermaid diagram using a \`\`\`mermaid code block if applicable. Ensure valid syntax (e.g., 'flowchart TD' or 'flowchart LR') with properly quoted node labels.
      - Code / technical terms: use inline code \`code\` or code blocks.
      - Quotes or highlighted callouts: use blockquotes '> '.
 
@@ -341,7 +336,7 @@ async function saveImagesToVault(app, images, settings, noteFolderPath) {
 }
 function formatNoteWithCallouts(app, transcription, savedFiles, settings, sourcePath) {
   const calloutTitle = settings.calloutTitle || "Original Scan";
-  if (settings.enablePageBreaks && savedFiles.length > 1) {
+  if (settings.enablePageBreaks) {
     const pageBreakRegex = /<!--\s*(?:PAGE_BREAK|PAGE)\s*:\s*(?:Page\s*)?(\d+)\s*-->/gi;
     const matches = [...transcription.matchAll(pageBreakRegex)];
     if (matches.length > 0) {
@@ -446,11 +441,13 @@ var DigitizeModal = class extends import_obsidian4.Modal {
     this.isProcessing = false;
     this.showKeyInput = false;
     this.enablePageBreaks = false;
+    this.embedCallouts = true;
     this.statusMessageEl = null;
     this.submitButtonEl = null;
     this.plugin = plugin;
     this.activeFile = this.app.workspace.getActiveFile();
     this.enablePageBreaks = this.plugin.settings.enablePageBreaks ?? false;
+    this.embedCallouts = this.plugin.settings.embedCallouts ?? true;
     if (initialTargetMode) {
       this.targetMode = initialTargetMode;
     } else if (this.activeFile && this.activeFile.extension === "md") {
@@ -529,6 +526,19 @@ var DigitizeModal = class extends import_obsidian4.Modal {
       titleInputContainer.style.display = "none";
     }
     const optionsSection = contentEl.createDiv({ cls: "digitizer-options-section" });
+    const calloutLabel = optionsSection.createEl("label", { cls: "digitizer-checkbox-label" });
+    const calloutCheckbox = calloutLabel.createEl("input", { type: "checkbox" });
+    calloutCheckbox.checked = this.embedCallouts;
+    calloutLabel.appendText(" Add callout with original scan");
+    const calloutDesc = optionsSection.createEl("p", {
+      cls: "digitizer-checkbox-desc",
+      text: "Embeds original page scan inside a collapsible callout for easy proofreading."
+    });
+    calloutCheckbox.addEventListener("change", async () => {
+      this.embedCallouts = calloutCheckbox.checked;
+      this.plugin.settings.embedCallouts = this.embedCallouts;
+      await this.plugin.saveSettings();
+    });
     const pageBreakLabel = optionsSection.createEl("label", { cls: "digitizer-checkbox-label" });
     const pageBreakCheckbox = pageBreakLabel.createEl("input", { type: "checkbox" });
     pageBreakCheckbox.checked = this.enablePageBreaks;
@@ -769,13 +779,16 @@ var DigitizeModal = class extends import_obsidian4.Modal {
         const parentFolder = this.app.fileManager.getNewFileParent(this.activeFile ? this.activeFile.path : "");
         noteFolderPath = parentFolder && parentFolder.path !== "/" ? parentFolder.path : "";
       }
-      this.updateStatus("Saving page images to scans subfolder...");
-      const savedTFiles = await saveImagesToVault(
-        this.app,
-        preparedImages,
-        this.plugin.settings,
-        noteFolderPath
-      );
+      let savedTFiles = [];
+      if (this.embedCallouts) {
+        this.updateStatus("Saving page images to scans subfolder...");
+        savedTFiles = await saveImagesToVault(
+          this.app,
+          preparedImages,
+          this.plugin.settings,
+          noteFolderPath
+        );
+      }
       const effectiveModel = getEffectiveModel(this.plugin.settings);
       this.updateStatus(`Transcribing ${preparedImages.length} page(s) with ${effectiveModel}...`);
       const transcription = await transcribeImagesWithGemini({
@@ -789,13 +802,17 @@ var DigitizeModal = class extends import_obsidian4.Modal {
         noteSpecificInstruction: this.customInstructions,
         enablePageBreaks: this.enablePageBreaks
       });
-      this.updateStatus("Building note and embedding scans...");
+      this.updateStatus("Building note...");
       const targetPath = this.targetMode === "append" && this.activeFile ? this.activeFile.path : noteFolderPath ? `${noteFolderPath}/note.md` : "note.md";
       const formattedContent = formatNoteWithCallouts(
         this.app,
         transcription,
         savedTFiles,
-        { ...this.plugin.settings, enablePageBreaks: this.enablePageBreaks },
+        {
+          ...this.plugin.settings,
+          enablePageBreaks: this.enablePageBreaks,
+          embedCallouts: this.embedCallouts
+        },
         targetPath
       );
       const result = await writeNoteContent(
