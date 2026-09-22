@@ -1,4 +1,4 @@
-import { App, TFile, normalizePath } from "obsidian";
+import { App, TFile, TFolder, normalizePath } from "obsidian";
 import { NotebookDigitizerSettings } from "./settings";
 
 export interface PreparedImage {
@@ -24,6 +24,8 @@ export async function ensureFolderExists(app: App, folderPath: string): Promise<
 		const existing = app.vault.getAbstractFileByPath(current);
 		if (!existing) {
 			await app.vault.createFolder(current);
+		} else if (!(existing instanceof TFolder)) {
+			throw new Error(`Cannot create scan folder because '${current}' is already a file.`);
 		}
 	}
 }
@@ -41,31 +43,39 @@ export async function saveImagesToVault(
 	const savedFiles: TFile[] = [];
 	const subfolderSetting = (settings.attachmentFolder || "").trim() || "scans";
 
-	let targetFolder: string;
 	const cleanParent = (!noteFolderPath || noteFolderPath === "/") ? "" : normalizePath(noteFolderPath);
-
-	if (subfolderSetting.startsWith("/")) {
-		// Vault-root absolute path
-		targetFolder = normalizePath(subfolderSetting.substring(1));
-	} else if (subfolderSetting.includes("/")) {
-		// Specific subpath
-		targetFolder = normalizePath(subfolderSetting);
-	} else {
-		// Relative to note folder (e.g. NoteFolder/scans or scans at root)
-		targetFolder = cleanParent ? normalizePath(`${cleanParent}/${subfolderSetting}`) : subfolderSetting;
+	const isVaultRootPath = subfolderSetting.startsWith("/");
+	const requestedPath = isVaultRootPath ? subfolderSetting.substring(1) : subfolderSetting;
+	const requestedParts = requestedPath.split(/[\\/]+/);
+	if (requestedParts.some((part) => part === "." || part === "..")) {
+		throw new Error("The scans subfolder cannot contain '.' or '..' path segments.");
 	}
+	const targetFolder = isVaultRootPath
+		? normalizePath(requestedPath)
+		: normalizePath(cleanParent ? `${cleanParent}/${requestedPath}` : requestedPath);
 
 	await ensureFolderExists(app, targetFolder);
 
-	for (let i = 0; i < images.length; i++) {
-		const img = images[i];
-		let targetPath = normalizePath(`${targetFolder}/${img.name}`);
+	try {
+		for (let i = 0; i < images.length; i++) {
+			const img = images[i];
+			let targetPath = normalizePath(`${targetFolder}/${img.name}`);
 
-		// Avoid overwriting existing files if name clashes
-		targetPath = getUniqueFilePath(app, targetPath);
+			// Avoid overwriting existing files if names clash.
+			targetPath = getUniqueFilePath(app, targetPath);
 
-		const createdFile = await app.vault.createBinary(targetPath, img.arrayBuffer);
-		savedFiles.push(createdFile);
+			const createdFile = await app.vault.createBinary(targetPath, img.arrayBuffer);
+			savedFiles.push(createdFile);
+		}
+	} catch (error) {
+		for (const file of savedFiles) {
+			try {
+				await app.fileManager.trashFile(file);
+			} catch (cleanupError) {
+				console.error(`Failed to clean up scan file: ${file.path}`, cleanupError);
+			}
+		}
+		throw error;
 	}
 
 	return savedFiles;
@@ -81,7 +91,7 @@ export function formatNoteWithCallouts(
 	settings: NotebookDigitizerSettings,
 	sourcePath: string
 ): string {
-	const calloutTitle = settings.calloutTitle || "Original Scan";
+	const calloutTitle = settings.calloutTitle || "Original scan";
 
 	// If page breaks are enabled, format per page
 	if (settings.enablePageBreaks) {
@@ -92,7 +102,7 @@ export function formatNoteWithCallouts(
 			const sections: string[] = [];
 
 			// Preserve any title/preamble text before the first page break
-			const preamble = transcription.substring(0, matches[0].index!).trim();
+			const preamble = transcription.substring(0, matches[0].index).trim();
 			if (preamble.length > 0) {
 				sections.push(preamble);
 			}
@@ -100,8 +110,8 @@ export function formatNoteWithCallouts(
 			for (let i = 0; i < matches.length; i++) {
 				const match = matches[i];
 				const pageNum = parseInt(match[1], 10);
-				const startIndex = match.index! + match[0].length;
-				const endIndex = i + 1 < matches.length ? matches[i + 1].index! : transcription.length;
+				const startIndex = match.index + match[0].length;
+				const endIndex = i + 1 < matches.length ? matches[i + 1].index : transcription.length;
 				const pageText = transcription.substring(startIndex, endIndex).trim();
 
 				const fileIndex = pageNum - 1;
@@ -154,10 +164,7 @@ export async function writeNoteContent(
 	noteFolderPath?: string
 ): Promise<AssembledNoteResult> {
 	if (targetMode === "append" && activeFile) {
-		const existingContent = await app.vault.read(activeFile);
-		const divider = existingContent.trim().length > 0 ? "\n\n---\n\n" : "";
-		const updatedContent = `${existingContent.trim()}${divider}${formattedContent}`;
-		await app.vault.modify(activeFile, updatedContent);
+		await app.vault.process(activeFile, (existingContent) => appendWithDivider(existingContent, formattedContent));
 
 		return {
 			targetFile: activeFile,
@@ -167,7 +174,7 @@ export async function writeNoteContent(
 
 	// Create new note
 	const baseName = newNoteTitle && newNoteTitle.trim().length > 0
-		? newNoteTitle.trim()
+		? sanitizeNoteTitle(newNoteTitle)
 		: `Handwritten Note ${getFormattedDate()}`;
 
 	const cleanParent = (!noteFolderPath || noteFolderPath === "/") ? "" : normalizePath(noteFolderPath);
@@ -180,6 +187,40 @@ export async function writeNoteContent(
 		targetFile: createdFile,
 		isNewFile: true,
 	};
+}
+
+export function appendWithDivider(existingContent: string, newContent: string): string {
+	if (existingContent.trim().length === 0) {
+		return `${existingContent}${newContent}`;
+	}
+
+	const divider = existingContent.endsWith("\n\n")
+		? "---\n\n"
+		: existingContent.endsWith("\n")
+			? "\n---\n\n"
+			: "\n\n---\n\n";
+	return `${existingContent}${divider}${newContent}`;
+}
+
+export function sanitizeNoteTitle(title: string): string {
+	let sanitized = title
+		.trim()
+		.split("")
+		.filter((character) => character.charCodeAt(0) >= 32)
+		.join("")
+		.replace(/[\\/:*?"<>|]/g, "-")
+		.replace(/[. ]+$/g, "")
+		.trim()
+		.slice(0, 180)
+		.replace(/[. ]+$/g, "");
+
+	if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(sanitized)) {
+		sanitized = `${sanitized}-note`;
+	}
+
+	return sanitized && sanitized !== "." && sanitized !== ".."
+		? sanitized
+		: `Handwritten Note ${getFormattedDate()}`;
 }
 
 function getUniqueFilePath(app: App, targetPath: string): string {

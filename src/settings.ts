@@ -1,8 +1,8 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, PluginSettingTab, SecretComponent, Setting } from "obsidian";
 import type NotebookDigitizerPlugin from "./main";
 
 export interface NotebookDigitizerSettings {
-	apiKey: string;
+	apiKeySecret: string;
 	model: string;
 	customModel: string;
 	attachmentFolder: string;
@@ -13,30 +13,33 @@ export interface NotebookDigitizerSettings {
 }
 
 export const DEFAULT_SETTINGS: NotebookDigitizerSettings = {
-	apiKey: "",
+	apiKeySecret: "notebook-digitizer-gemini-api-key",
 	model: "gemini-3.8-flash",
 	customModel: "",
 	attachmentFolder: "scans",
 	embedCallouts: true,
 	enablePageBreaks: false,
-	calloutTitle: "Original Scan",
+	calloutTitle: "Original scan",
 	customPrompt: "",
 };
 
 export const AVAILABLE_MODELS = [
-	{ id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (Latest - Fast & Recommended)" },
-	{ id: "gemini-3.1-pro", name: "Gemini 3.1 Pro (Most Capable for Complex Handwriting)" },
-	{ id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite (High Throughput)" },
-	{ id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
-	{ id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
-	{ id: "gemini-1.5-flash", name: "Gemini 1.5 Flash" },
-	{ id: "gemini-1.5-pro", name: "Gemini 1.5 Pro" },
-	{ id: "custom", name: "Custom Model (specify below)..." },
+	{ id: "gemini-3.8-flash", name: "Gemini 3.8 Flash (recommended)" },
+	{ id: "gemini-3.6-flash", name: "Gemini 3.6 Flash" },
+	{ id: "gemini-3.5-flash", name: "Gemini 3.5 Flash" },
+	{ id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash-Lite" },
+	{ id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview" },
+	{ id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash-Lite" },
+	{ id: "custom", name: "Custom model" },
 ];
 
 export function getEffectiveModel(settings: NotebookDigitizerSettings): string {
-	if (settings.model === "custom" && settings.customModel.trim()) {
-		return settings.customModel.trim();
+	if (settings.model === "custom") {
+		const customModel = settings.customModel.trim();
+		if (!customModel) {
+			throw new Error("Enter a Gemini model ID in Settings before using the custom model option.");
+		}
+		return customModel;
 	}
 	return settings.model || "gemini-3.8-flash";
 }
@@ -53,33 +56,29 @@ export class NotebookDigitizerSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Handwritten Notebook Digitizer Settings" });
-
-		// API Key Setting
+		// API key setting
 		const keySetting = new Setting(containerEl)
-			.setName("Gemini API Key")
-			.setDesc("Each user should provide their own free Google Gemini API key. Keys are saved locally in your vault.")
-			.addText((text) => {
-				text.inputEl.type = "password";
-				text
-					.setPlaceholder("AIzaSy...")
-					.setValue(this.plugin.settings.apiKey)
+			.setName("Gemini API key")
+			.setDesc("Select or create an API key in Obsidian's secure secret storage.")
+			.addComponent((el) => {
+				return new SecretComponent(this.app, el)
+					.setValue(this.plugin.settings.apiKeySecret)
 					.onChange(async (value) => {
-						this.plugin.settings.apiKey = value.trim();
+						this.plugin.settings.apiKeySecret = value;
 						await this.plugin.saveSettings();
 					});
 			});
 
 		keySetting.descEl.createEl("br");
 		const link = keySetting.descEl.createEl("a", {
-			text: "Get your free API key at Google AI Studio (aistudio.google.com/app/apikey)",
+			text: "Get an API key at Google AI Studio (aistudio.google.com/app/apikey)",
 			href: "https://aistudio.google.com/app/apikey",
 		});
 		link.setAttr("target", "_blank");
 
 		// Model Selection
 		new Setting(containerEl)
-			.setName("Gemini Model")
+			.setName("Gemini model")
 			.setDesc("Select the model to use for handwriting recognition. Defaults to Gemini 3.8 Flash.")
 			.addDropdown((dropdown) => {
 				for (const model of AVAILABLE_MODELS) {
@@ -96,11 +95,11 @@ export class NotebookDigitizerSettingTab extends PluginSettingTab {
 		// Custom Model Input (shown if "custom" is selected)
 		if (this.plugin.settings.model === "custom") {
 			new Setting(containerEl)
-				.setName("Custom Model Name")
-				.setDesc("Enter any valid Gemini model identifier from Google AI Studio (e.g. gemini-3.8-flash).")
+				.setName("Custom model ID")
+				.setDesc("Enter an exact Gemini model identifier from Google AI Studio.")
 				.addText((text) => {
 					text
-						.setPlaceholder("e.g. gemini-3.8-flash")
+					.setPlaceholder("Model ID")
 						.setValue(this.plugin.settings.customModel)
 						.onChange(async (value) => {
 							this.plugin.settings.customModel = value.trim();
@@ -112,25 +111,25 @@ export class NotebookDigitizerSettingTab extends PluginSettingTab {
 
 		// Callout Title
 		new Setting(containerEl)
-			.setName("Callout Title")
-			.setDesc("Default title for the collapsible image callout (e.g., 'Original Scan').")
+			.setName("Callout title")
+			.setDesc("Default title for the collapsible image callout.")
 			.addText((text) => {
 				text
-					.setPlaceholder("Original Scan")
+					.setPlaceholder("Original scan")
 					.setValue(this.plugin.settings.calloutTitle)
 					.onChange(async (value) => {
-						this.plugin.settings.calloutTitle = value.trim() || "Original Scan";
+						this.plugin.settings.calloutTitle = value.trim() || "Original scan";
 						await this.plugin.saveSettings();
 					});
 			});
 
 		// Attachment Folder
 		new Setting(containerEl)
-			.setName("Scans Subfolder")
+			.setName("Scans subfolder")
 			.setDesc("Name of the subfolder under the note's directory where uploaded page scans will be stored (defaults to 'scans'). Keeps your notes directory clean.")
 			.addText((text) => {
 				text
-					.setPlaceholder("scans")
+					.setPlaceholder("Scans")
 					.setValue(this.plugin.settings.attachmentFolder)
 					.onChange(async (value) => {
 						this.plugin.settings.attachmentFolder = value.trim() || "scans";
@@ -140,11 +139,11 @@ export class NotebookDigitizerSettingTab extends PluginSettingTab {
 
 		// Custom Base Instructions
 		new Setting(containerEl)
-			.setName("Default Custom Instructions")
+			.setName("Default custom instructions")
 			.setDesc("Optional persistent instructions added to every transcription prompt (e.g., preferred formatting, vocabulary).")
 			.addTextArea((textArea) => {
 				textArea
-					.setPlaceholder("e.g. Keep technical terms in inline code blocks, prefer bullet points for summary lists.")
+					.setPlaceholder("Keep technical terms in inline code blocks and prefer bullets for summary lists.")
 					.setValue(this.plugin.settings.customPrompt)
 					.onChange(async (value) => {
 						this.plugin.settings.customPrompt = value;

@@ -1,19 +1,19 @@
 # Handwritten Notebook Digitizer for Obsidian
 
-An Obsidian plugin that digitizes physical notebook pages in any language into structured Markdown notes using Google's Gemini Vision API.
+An Obsidian plugin that digitizes physical notebook pages in any language into structured Markdown notes using Google's Gemini API.
 
 ---
 
 ## Features
 
-- **Multimodal Handwriting Recognition**: Uses Google Gemini models (featuring the latest **Gemini 3.8 Flash**, **Gemini 3.1 Pro**, and **Gemini 3.5 Flash-Lite**, along with 2.5/2.0/1.5 versions and custom models) to accurately transcribe messy handwriting by reasoning through grammar and sentence context.
+- **Multimodal Handwriting Recognition**: Uses current Google Gemini models, including **Gemini 3.8 Flash**, **Gemini 3.6 Flash**, **Gemini 3.5 Flash-Lite**, and **Gemini 3.1 Pro Preview**, plus custom model IDs.
 - **Multilingual Handwriting & Mixed Content**: Seamlessly transcribes handwriting in any language or script, including mixed bilingual text, technical terminology, programming code, LaTeX mathematical formulas (`$E=mc^2$`), tables, and nested bullet points.
 - **Handwritten Diagrams to Mermaid**: Automatically detects handwritten flowcharts, workflows, hierarchies, sequence charts, and process diagrams and converts them into native Obsidian Mermaid diagrams (````mermaid ... ````).
 - **Continuous Seamless Notes**: When multiple pages are selected, they are combined into one natural, continuous Markdown note without artificial page break dividers (or optionally separated with page dividers via an in-modal toggle).
-- **Automatic Image Optimization**: Automatically optimizes photos (up to 1920px max dimension, quality-tuned JPEG) before uploading and saving. This drastically reduces payload size (from 5–8MB down to ~300–600KB) and prevents gateway timeouts, with zero loss in handwriting recognition quality with Gemini 3.8 Flash.
+- **Automatic Image Optimization**: Downscales photos to a maximum dimension of 1920px and converts them to quality-tuned JPEGs before uploading and optionally saving them.
 - **Dedicated Scans Subfolder**: Page images are stored inside a dedicated `scans/` subfolder under the note's directory by default, keeping your notes clean.
-- **Collapsible Scans for Proofreading**: Optionally embeds original page scans into collapsible callouts (`> [!info]- Original Scan (Page X)`) at the top of the group or per page, allowing effortless side-by-side verification.
-- **Personal Gemini API Key**: Users provide and store their own free Google Gemini API key locally in their vault. Keys can be entered or changed directly inside the capture modal or in Settings.
+- **Collapsible Scans for Proofreading**: Optionally embeds original page scans into collapsible callouts (`> [!info]- Original scan (Page X)`) at the top of the group or per page, allowing effortless side-by-side verification.
+- **Personal Gemini API Key**: Users provide their own Google Gemini API key. The key is stored through Obsidian's SecretStorage API and can be entered in the capture modal or selected in Settings.
 - **Interactive Capture Modal**:
   - 📁 **File Selector / Drag & Drop**: Select multiple page images at once.
   - 📷 **Mobile Camera Capture**: Capture photos directly from your phone's camera inside Obsidian (`capture="environment"`).
@@ -28,32 +28,35 @@ An Obsidian plugin that digitizes physical notebook pages in any language into s
 
 ## Installation
 
-### Manual Installation to your Obsidian Vault
+### Manual installation
 
-1. Inside your Obsidian vault folder, navigate to:
+This plugin requires Obsidian 1.11.4 or later.
+
+1. Download `main.js`, `manifest.json`, and `styles.css` from the latest GitHub release.
+2. Inside your Obsidian vault folder, navigate to:
    ```
    <Vault>/.obsidian/plugins/
    ```
-2. Create a new folder named `notebook-digitizer`:
+3. Create a new folder named `notebook-digitizer`:
    ```
    <Vault>/.obsidian/plugins/notebook-digitizer/
    ```
-3. Copy the following files from this repository into that folder:
+4. Copy the downloaded files into that folder:
    - `main.js`
    - `manifest.json`
    - `styles.css`
-4. In Obsidian, go to **Settings** > **Community plugins**, click the refresh icon, and toggle on **Handwritten Notebook Digitizer**.
+5. In Obsidian, go to **Settings** > **Community plugins**, click the refresh icon, and enable **Handwritten Notebook Digitizer**.
 
 ---
 
 ## Configuration
 
-1. Get a free Gemini API key from [Google AI Studio](https://aistudio.google.com/).
+1. Get a Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey). Availability, quotas, and billing depend on Google's current terms and the selected model.
 2. In Obsidian, go to **Settings** > **Handwritten Notebook Digitizer**:
-   - **Gemini API Key**: Paste your API key.
-   - **Gemini Model**: Select from `Gemini 3.8 Flash` (default, fast & recommended), `Gemini 3.1 Pro` (most capable for complex handwriting), `Gemini 3.5 Flash-Lite`, earlier versions, or `Custom Model`.
+   - **Gemini API key**: Select or create a key using Obsidian's secret storage.
+   - **Gemini model**: Select a supported model. `Gemini 3.8 Flash` is the default, or choose `Custom model` and enter an exact model ID.
    - **Scans Subfolder**: Default is `scans`. Uploaded page images are stored in a dedicated subfolder under the note's directory to keep your notes clean.
-   - **Callout Title**: Default is `Original Scan` (or customize to your preferred title or language).
+   - **Callout title**: Default is `Original scan` (or customize it to your preferred title or language).
 
 ---
 
@@ -61,25 +64,38 @@ An Obsidian plugin that digitizes physical notebook pages in any language into s
 
 ### 1. Digitize a Group of Pages (New Note)
 1. Click the **Camera ribbon icon** on the left ribbon, or press `Ctrl+P` / `Cmd+P` and choose:
-   `Digitize Handwritten Notes`
-2. Click **📁 Choose Images** (or drag and drop images), or **📷 Capture with Camera** on mobile.
+   `Digitize handwritten notes`
+2. Click **📁 Choose images** (or drag and drop images), or **📷 Capture with camera** on mobile.
 3. (Optional) Enter custom instructions for this batch.
 4. (Optional) In the Options section:
    - Toggle **Add callout with original scan** (enabled by default; uncheck if you only want transcribed text without embedding or saving scans).
    - Toggle **Separate pages with page breaks** if you want explicit page dividers (`---`) instead of one continuous note.
-5. Keep **Create New Note** selected (or choose Append), enter a title, and click **Digitize & Transcribe**.
+5. Keep **Create new note** selected (or choose Append), enter a title, and click **Digitize & transcribe**.
 
 ### 2. Append Pages to an Existing Note
 1. Open the note you want to add pages to.
 2. Open the command palette and run:
-   `Append Handwritten Notes to Active File`
+   `Append handwritten notes to active file`
    *(or open the modal and select "Append to Active Note")*
 3. Select or capture the new pages.
-4. Click **Digitize & Transcribe**. The new pages and their collapsible scan callouts will be cleanly appended to the end of your note with a section divider.
+4. Click **Digitize & transcribe**. The new pages and their collapsible scan callouts will be cleanly appended to the end of your note with a section divider.
 
 ---
 
-## Development & Building
+## Network use and privacy
+
+This plugin requires network access to Google's Gemini API. When you start a transcription, the plugin sends the following directly from Obsidian to `generativelanguage.googleapis.com`:
+
+- The selected notebook-page images after local JPEG optimization.
+- The built-in transcription prompt.
+- Any persistent or batch-specific instructions you entered.
+- Your Gemini API key in the `x-goog-api-key` request header.
+
+The plugin does not include analytics or telemetry and does not operate a separate server. Google processes API requests according to the [Gemini API terms](https://ai.google.dev/gemini-api/terms) and [Google Privacy Policy](https://policies.google.com/privacy). Do not upload pages containing information you are not permitted to send to Google.
+
+The API key is stored using Obsidian's SecretStorage API. Original page images are saved in the vault only when scan callouts are enabled.
+
+## Development and building
 
 ```bash
 # Install dependencies
@@ -94,4 +110,3 @@ npm run dev
 
 ## License
 MIT
-

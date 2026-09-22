@@ -1,12 +1,14 @@
 {
   "name": "obsidian-notebook-digitizer",
   "version": "1.0.0",
-  "description": "Digitize handwritten notebook pages in any language into structured Obsidian notes using Gemini Vision API.",
+  "description": "Digitize handwritten notebook pages in any language into structured Markdown notes using the Gemini API.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit && node esbuild.config.mjs production",
-    "test": "esbuild test/verify.ts --bundle --platform=node --external:obsidian | node"
+    "test": "esbuild test/verify.ts --bundle --platform=node --external:obsidian | node",
+    "lint": "eslint .",
+    "check": "npm run lint && npm test && npm run build"
   },
   "keywords": [
     "obsidian",
@@ -18,12 +20,14 @@
     "digitizer",
     "notes"
   ],
-  "author": "Antigravity",
+  "author": "Hussain Elemam",
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.12.7",
-    "esbuild": "^0.21.2",
-    "obsidian": "^1.7.2",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-obsidianmd": "^0.4.2",
+    "obsidian": "^1.13.1",
     "tslib": "^2.6.2",
     "typescript": "^5.4.5"
   }

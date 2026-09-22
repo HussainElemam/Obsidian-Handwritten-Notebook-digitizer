@@ -13,10 +13,38 @@ export interface TranscriptionRequest {
 	userCustomPrompt?: string;
 	noteSpecificInstruction?: string;
 	enablePageBreaks?: boolean;
+	isCancelled?: () => boolean;
+}
+
+interface GeminiTextPart {
+	text?: string;
+}
+
+interface GeminiCandidate {
+	finishReason?: string;
+	finishMessage?: string;
+	content?: { parts?: GeminiTextPart[] };
+}
+
+interface GeminiResponse {
+	candidates?: GeminiCandidate[];
+}
+
+interface HttpErrorDetails {
+	status: number;
+	text?: string;
+	message?: string;
+}
+
+export class TranscriptionCancelledError extends Error {
+	constructor() {
+		super("Transcription cancelled.");
+		this.name = "TranscriptionCancelledError";
+	}
 }
 
 export async function transcribeImagesWithGemini(request: TranscriptionRequest): Promise<string> {
-	const { apiKey, model, images, userCustomPrompt, noteSpecificInstruction, enablePageBreaks } = request;
+	const { apiKey, model, images, userCustomPrompt, noteSpecificInstruction, enablePageBreaks, isCancelled } = request;
 
 	if (!apiKey || apiKey.trim().length === 0) {
 		throw new Error("Gemini API key is not configured. Please add your API key in Settings > Handwritten Notebook Digitizer.");
@@ -28,7 +56,7 @@ export async function transcribeImagesWithGemini(request: TranscriptionRequest):
 
 	const promptText = buildSystemPrompt(userCustomPrompt, noteSpecificInstruction, !!enablePageBreaks);
 
-	const parts: any[] = [
+	const parts: Array<GeminiTextPart | { inline_data: { mime_type: string; data: string } }> = [
 		{
 			text: promptText,
 		},
@@ -45,7 +73,7 @@ export async function transcribeImagesWithGemini(request: TranscriptionRequest):
 		});
 	}
 
-	const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+	const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
 
 	const requestPayload = {
 		contents: [
@@ -59,14 +87,16 @@ export async function transcribeImagesWithGemini(request: TranscriptionRequest):
 		},
 	};
 
-	let lastError: any = null;
+	let lastError: unknown = null;
 	const maxRetries = 2;
 
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
 		try {
+			throwIfCancelled(isCancelled);
 			if (attempt > 0) {
 				// Wait with backoff before retry (1.5s, 3s)
-				await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+				await new Promise((resolve) => window.setTimeout(resolve, attempt * 1500));
+				throwIfCancelled(isCancelled);
 			}
 
 			const response = await requestUrl({
@@ -74,6 +104,7 @@ export async function transcribeImagesWithGemini(request: TranscriptionRequest):
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
+					"x-goog-api-key": apiKey.trim(),
 				},
 				body: JSON.stringify(requestPayload),
 			});
@@ -86,50 +117,60 @@ export async function transcribeImagesWithGemini(request: TranscriptionRequest):
 				handleHttpError(response.status, response.text, model);
 			}
 
-			const data = response.json;
-			const candidate = data?.candidates?.[0];
-
-			if (!candidate) {
-				throw new Error("Gemini returned no response candidates. Please verify image clarity or try another model.");
-			}
-
-			if (candidate.finishReason === "SAFETY") {
-				throw new Error("Gemini blocked the response due to content safety settings.");
-			}
-
-			const textParts = candidate.content?.parts;
-			if (!textParts || textParts.length === 0) {
-				throw new Error("Gemini returned an empty transcription response.");
-			}
-
-			let fullTranscription = "";
-			for (const part of textParts) {
-				if (part.text) {
-					fullTranscription += part.text;
-				}
-			}
-
-			return fullTranscription.trim();
-		} catch (error: any) {
+			throwIfCancelled(isCancelled);
+			return extractTranscription(response.json);
+		} catch (error: unknown) {
 			lastError = error;
-			if ((error.status === 503 || error.status === 500) && attempt < maxRetries) {
+			const httpError = getHttpErrorDetails(error);
+			if (httpError && (httpError.status === 503 || httpError.status === 500) && attempt < maxRetries) {
 				continue;
 			}
-			if (error.status) {
-				handleHttpError(error.status, error.text || error.message, model);
+			if (httpError) {
+				handleHttpError(httpError.status, httpError.text || httpError.message, model);
 			}
 			throw error;
 		}
 	}
 
 	if (lastError) {
-		if (lastError.status) {
-			handleHttpError(lastError.status, lastError.text || lastError.message, model);
+		const httpError = getHttpErrorDetails(lastError);
+		if (httpError) {
+			handleHttpError(httpError.status, httpError.text || httpError.message, model);
 		}
-		throw lastError;
+		if (lastError instanceof Error) throw lastError;
 	}
 
 	throw new Error("Failed to communicate with Gemini API.");
+}
+
+export function extractTranscription(responseData: unknown): string {
+	const data = responseData as GeminiResponse;
+	const candidate = data?.candidates?.[0];
+
+	if (!candidate) {
+		throw new Error("Gemini returned no response candidates. Please verify image clarity or try another model.");
+	}
+
+	if (candidate.finishReason && candidate.finishReason !== "STOP") {
+		if (candidate.finishReason === "SAFETY") {
+			throw new Error("Gemini blocked the response due to content safety settings.");
+		}
+		if (candidate.finishReason === "MAX_TOKENS") {
+			throw new Error("Gemini stopped before finishing the transcription because the output was too long. Try fewer pages at once.");
+		}
+		throw new Error(`Gemini did not finish the transcription (${candidate.finishReason})${candidate.finishMessage ? `: ${candidate.finishMessage}` : "."}`);
+	}
+
+	const textParts = candidate.content?.parts;
+	if (!textParts || textParts.length === 0) {
+		throw new Error("Gemini returned an empty transcription response.");
+	}
+
+	const fullTranscription = textParts.map((part) => part.text ?? "").join("").trim();
+	if (!fullTranscription) {
+		throw new Error("Gemini returned an empty transcription response.");
+	}
+	return fullTranscription;
 }
 
 function handleHttpError(status: number, messageText?: string, modelName?: string) {
@@ -142,7 +183,7 @@ function handleHttpError(status: number, messageText?: string, modelName?: strin
 	} else if (status === 429) {
 		throw new Error("Gemini API Error (429 Rate Limit Exceeded): Quota exceeded. Please wait a few moments before trying again.");
 	} else if (status === 503) {
-		throw new Error(`Gemini API Server Error (503 Service Unavailable): The model '${modelName || ""}' is temporarily overloaded on Google's servers. Please try again in a few moments, or select another model in settings (e.g. Gemini 2.0 Flash or Gemini 1.5 Flash).`);
+		throw new Error(`Gemini API Server Error (503 Service Unavailable): The model '${modelName || ""}' is temporarily overloaded on Google's servers. Please try again in a few moments, or select another current model in settings.`);
 	} else if (status >= 500) {
 		throw new Error(`Gemini API Server Error (${status}): Google's servers encountered an error. Please try again in a few moments.`);
 	} else {
@@ -150,3 +191,21 @@ function handleHttpError(status: number, messageText?: string, modelName?: strin
 	}
 }
 
+function throwIfCancelled(isCancelled?: () => boolean): void {
+	if (isCancelled?.()) {
+		throw new TranscriptionCancelledError();
+	}
+}
+
+function getHttpErrorDetails(error: unknown): HttpErrorDetails | null {
+	if (typeof error !== "object" || error === null) return null;
+
+	const candidate = error as { status?: unknown; text?: unknown; message?: unknown };
+	if (typeof candidate.status !== "number") return null;
+
+	return {
+		status: candidate.status,
+		text: typeof candidate.text === "string" ? candidate.text : undefined,
+		message: typeof candidate.message === "string" ? candidate.message : undefined,
+	};
+}

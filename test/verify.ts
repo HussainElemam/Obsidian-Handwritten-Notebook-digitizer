@@ -4,6 +4,7 @@ const originalRequire = Module.prototype.require;
 Module.prototype.require = function (id: string) {
 	if (id === "obsidian") {
 		return {
+			requestUrl: async () => { throw new Error("requestUrl is not available in logic tests"); },
 			App: class {
 				fileManager = {
 					generateMarkdownLink: (file: any) => `![[${file.path}]]`,
@@ -17,6 +18,7 @@ Module.prototype.require = function (id: string) {
 					this.name = path.split("/").pop() || "";
 				}
 			},
+			TFolder: class { },
 			PluginSettingTab: class { },
 			Setting: class {
 				setName() { return this; }
@@ -69,11 +71,20 @@ function runTests() {
 	if (DEFAULT_SETTINGS.attachmentFolder !== "scans") {
 		throw new Error(`Expected attachmentFolder to default to 'scans', got: ${DEFAULT_SETTINGS.attachmentFolder}`);
 	}
-	if (getEffectiveModel({ model: "gemini-3.1-pro" }) !== "gemini-3.1-pro") {
+	if (getEffectiveModel({ model: "gemini-3.1-pro-preview" }) !== "gemini-3.1-pro-preview") {
 		throw new Error("Failed to resolve standard model");
 	}
 	if (getEffectiveModel({ model: "custom", customModel: "gemini-ultra-special" }) !== "gemini-ultra-special") {
 		throw new Error("Failed to resolve custom model");
+	}
+	let emptyCustomRejected = false;
+	try {
+		getEffectiveModel({ model: "custom", customModel: "" });
+	} catch {
+		emptyCustomRejected = true;
+	}
+	if (!emptyCustomRejected) {
+		throw new Error("An empty custom model ID should be rejected");
 	}
 	console.log("✓ Settings defaults and model resolution verified");
 
@@ -90,7 +101,7 @@ function runTests() {
 		DEFAULT_SETTINGS,
 		"note.md"
 	);
-	if (!note.includes("> [!info]- Original Scan") || !note.includes("page_1.jpg")) {
+	if (!note.includes("> [!info]- Original scan") || !note.includes("page_1.jpg")) {
 		throw new Error("Note should contain Original Scan callout with link to scan");
 	}
 	if (!note.includes("Test transcription text")) {
@@ -106,7 +117,7 @@ function runTests() {
 		{ ...DEFAULT_SETTINGS, embedCallouts: false },
 		"note.md"
 	);
-	if (noteNoCallouts.includes("> [!info]- Original Scan") || noteNoCallouts.includes("scans/")) {
+	if (noteNoCallouts.includes("> [!info]- Original scan") || noteNoCallouts.includes("scans/")) {
 		throw new Error("Note should NOT contain any callouts when embedCallouts is false");
 	}
 	if (!noteNoCallouts.includes("Test transcription text")) {
@@ -134,8 +145,44 @@ function runTests() {
 	}
 	console.log("✓ embedCallouts = false with page breaks verified");
 
+	console.log("--- Test 8: note title sanitization ---");
+	const { sanitizeNoteTitle } = require("../src/noteBuilder");
+	if (sanitizeNoteTitle("Lecture/Notes: Week 1") !== "Lecture-Notes- Week 1") {
+		throw new Error("Note title should remove path separators and reserved filename characters");
+	}
+	console.log("✓ Note title sanitization verified");
+
+	console.log("--- Test 9: append preserves existing note content ---");
+	const { appendWithDivider } = require("../src/noteBuilder");
+	const existingNote = "  Existing note with intentional whitespace  \n";
+	const appendedNote = appendWithDivider(existingNote, "New transcription");
+	if (!appendedNote.startsWith(existingNote) || !appendedNote.endsWith("---\n\nNew transcription")) {
+		throw new Error("Appending should preserve existing content exactly and add a divider");
+	}
+	console.log("✓ Non-destructive append formatting verified");
+
+	console.log("--- Test 10: Gemini response completion validation ---");
+	const { extractTranscription } = require("../src/gemini");
+	const completed = extractTranscription({
+		candidates: [{ finishReason: "STOP", content: { parts: [{ text: " Complete note " }] } }],
+	});
+	if (completed !== "Complete note") {
+		throw new Error("Completed Gemini response was not extracted correctly");
+	}
+	let truncationRejected = false;
+	try {
+		extractTranscription({
+			candidates: [{ finishReason: "MAX_TOKENS", content: { parts: [{ text: "Partial note" }] } }],
+		});
+	} catch {
+		truncationRejected = true;
+	}
+	if (!truncationRejected) {
+		throw new Error("Truncated Gemini responses should be rejected");
+	}
+	console.log("✓ Gemini finish reasons verified");
+
 	console.log("--- All logic tests passed! ---");
 }
 
 runTests();
-

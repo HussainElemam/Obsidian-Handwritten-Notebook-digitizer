@@ -2,9 +2,9 @@
   "id": "notebook-digitizer",
   "name": "Handwritten Notebook Digitizer",
   "version": "1.0.0",
-  "minAppVersion": "0.15.0",
-  "description": "Digitize handwritten notes in any language into structured Markdown notes using Gemini Vision API with optional scan callouts.",
-  "author": "Hussian Elemam",
-  "authorUrl": "",
+  "minAppVersion": "1.11.4",
+  "description": "Turn handwritten pages in any language into structured Markdown notes using the Gemini API.",
+  "author": "Hussain Elemam",
+  "authorUrl": "https://github.com/HussainElemam",
   "isDesktopOnly": false
 }
